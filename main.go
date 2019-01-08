@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/phayes/permbits"
@@ -41,8 +42,9 @@ func main() {
 	if pathOrCommand == path {
 		outputPath = generateOutputPath(filepath.Base(executablePath))
 	} else {
-		//TODO, sanitize filepath
-		outputPath = generateOutputPath(name)
+		reg, _ := regexp.Compile("[^a-zA-Z0-9]+")
+		sanitizedName := reg.ReplaceAllString(name, "")
+		outputPath = generateOutputPath(sanitizedName)
 	}
 
 	writeError := writeDesktopFile(outputPath, name, executablePath, icon)
