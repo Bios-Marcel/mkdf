@@ -11,18 +11,39 @@ import (
 	"github.com/phayes/permbits"
 )
 
+type pathOrCommand int
+
+const (
+	path    = 1
+	command = 2
+)
+
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Println("Please input path to the applications executable.")
-	executablePath := askExecutablePath(reader)
+	fmt.Println("Please choose wether you want to choose a path(1) or a command(2) as the 'Exec' parameter")
+	pathOrCommand := askIfPathOrCommand(reader)
+
+	if pathOrCommand == path {
+		fmt.Println("Please input path to the applications executable.")
+	} else {
+		fmt.Println("Please input the command to be executed.")
+	}
+	executablePath := askExecParameter(pathOrCommand, reader)
 
 	fmt.Println("Please input the applications name.")
 	name := askName(reader)
 
 	fmt.Println("Please input the path to the applications icon. (Leave empty for none)")
 	icon := askIcon(reader)
-	outputPath := generateOutputPath(executablePath)
+
+	var outputPath string
+	if pathOrCommand == path {
+		outputPath = generateOutputPath(filepath.Base(executablePath))
+	} else {
+		//TODO, sanitize filepath
+		outputPath = generateOutputPath(name)
+	}
 
 	writeError := writeDesktopFile(outputPath, name, executablePath, icon)
 	if writeError != nil {
@@ -31,14 +52,33 @@ func main() {
 	}
 }
 
-func generateOutputPath(executablePath string) string {
+func askIfPathOrCommand(reader *bufio.Reader) pathOrCommand {
+	answer, answerError := reader.ReadString('\n')
+	if answerError != nil {
+		fmt.Printf("Error reading answer: %s", answerError.Error())
+		os.Exit(0)
+	}
+
+	answer = strings.TrimSuffix(answer, "\n")
+
+	if answer == "1" {
+		return path
+	} else if answer == "2" {
+		return command
+	}
+
+	fmt.Println("Invalid answer, choose either '1' or '2'.")
+	return askIfPathOrCommand(reader)
+}
+
+func generateOutputPath(filename string) string {
 	currentUser, userError := user.Current()
 	if userError != nil {
 		fmt.Printf("Unable to retrieve current user: %s", userError.Error())
 		os.Exit(0)
 	}
 
-	return filepath.Join(currentUser.HomeDir, ".local", "share", "applications", filepath.Base(executablePath)+".desktop")
+	return filepath.Join(currentUser.HomeDir, ".local", "share", "applications", filename+".desktop")
 }
 
 func writeDesktopFile(outputPath, name, executablePath string, iconPath *string) error {
@@ -102,7 +142,7 @@ func askName(reader *bufio.Reader) string {
 	return name
 }
 
-func askExecutablePath(reader *bufio.Reader) string {
+func askExecParameter(choice pathOrCommand, reader *bufio.Reader) string {
 	executablePath, readError := reader.ReadString('\n')
 
 	if readError != nil {
@@ -113,8 +153,12 @@ func askExecutablePath(reader *bufio.Reader) string {
 	executablePath = strings.TrimSuffix(executablePath, "\n")
 
 	if len(executablePath) < 1 {
-		fmt.Println("The executable path has to be non-empty, try again.")
-		return askExecutablePath(reader)
+		fmt.Println("Your input has to be non-empty, try again.")
+		return askExecParameter(choice, reader)
+	}
+
+	if choice == command {
+		return executablePath
 	}
 
 	absoluteExecutablePath, pathError := filepath.Abs(executablePath)
